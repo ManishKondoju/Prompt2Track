@@ -132,63 +132,8 @@ Prompt2Track/
 
 The application coordinates three AI models to create cohesive musical content:
 
-```mermaid
-graph TB
-    subgraph "Frontend - React Application"
-        A[User Interface<br/>App.js]
-        B[TypeWriter Prompts<br/>Dynamic Examples]
-        C[Immersive Player<br/>Adaptive Colors]
-        D[Lyrics Display<br/>Spotify Style]
-        E[Loading States<br/>Skeleton Loaders]
-    end
-    
-    subgraph "Backend - FastAPI Server"
-        F[API Gateway<br/>app.py]
-        G[Request Validation<br/>Pydantic Models]
-        H[Prompt Optimizer<br/>Cross-Modal Engine]
-        I[Response Handler<br/>Asset Management]
-    end
-    
-    subgraph "AI Service Layer"
-        J[MusicGen Large<br/>Meta via Replicate]
-        K[DALL-E 3 HD<br/>OpenAI Image API]
-        L[GPT-4 Turbo<br/>OpenAI Text API]
-    end
-    
-    subgraph "Data Layer"
-        M[Static File Server<br/>Audio/Image Assets]
-        N[Response Cache<br/>Performance Layer]
-        O[Error Logging<br/>Monitoring System]
-    end
-    
-    A --> F
-    B --> F
-    F --> G
-    G --> H
-    
-    H --> J
-    H --> K
-    H --> L
-    
-    J --> I
-    K --> I
-    L --> I
-    
-    I --> M
-    I --> N
-    
-    M --> A
-    N --> A
-    
-    F --> O
-    
-    style A fill:#e1f5fe
-    style F fill:#f3e5f5
-    style J fill:#fff3e0
-    style K fill:#fff3e0
-    style L fill:#fff3e0
-    style M fill:#e8f5e8
-```
+<img width="1330" height="896" alt="image" src="https://github.com/user-attachments/assets/62a8a79f-d916-4794-8478-f932029b04f0" />
+
 
 ### Data Flow
 
