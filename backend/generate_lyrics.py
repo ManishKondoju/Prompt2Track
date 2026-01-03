@@ -1,5 +1,4 @@
 import os
-import openai
 import random
 import re
 from datetime import datetime
@@ -8,33 +7,97 @@ class LyricsGenerator:
     def __init__(self):
         print("🎤 Initializing OpenAI-powered Lyrics Generator...")
         
-        # Set OpenAI API key (make sure to set this in your environment)
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-        
-        if not openai.api_key:
+        # Initialize OpenAI client (new API)
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
             print("❌ OPENAI_API_KEY not found in environment variables!")
-            print("💡 Set it with: export OPENAI_API_KEY='your-api-key-here'")
             raise ValueError("OpenAI API key is required")
         
-        print("✅ OpenAI API key loaded successfully")
+        try:
+            from openai import OpenAI
+            self.client = OpenAI(api_key=api_key)
+            print("✅ OpenAI client initialized (new API)")
+        except Exception as e:
+            print(f"❌ Failed to initialize OpenAI client: {e}")
+            raise
         
-        self.load_song_templates()
+        self.load_synthetic_data_patterns()
 
-    def load_song_templates(self):
-        """Load song structure templates"""
-        self.song_structures = {
-            "pop": ["verse", "pre-chorus", "chorus", "verse", "pre-chorus", "chorus", "bridge", "chorus"],
-            "rock": ["verse", "chorus", "verse", "chorus", "bridge", "chorus", "chorus"],
-            "ballad": ["verse", "verse", "chorus", "verse", "chorus", "bridge", "chorus"],
-            "electronic": ["intro", "verse", "chorus", "verse", "chorus", "bridge", "chorus"],
-            "hip-hop": ["verse", "hook", "verse", "hook", "bridge", "hook"],
-            "indie": ["verse", "chorus", "verse", "chorus", "bridge", "chorus"],
-            "classical": ["verse", "verse", "chorus", "bridge", "chorus"]
+    def load_synthetic_data_patterns(self):
+        """Load synthetic data generation patterns for lyrics enhancement"""
+        self.genre_styles = {
+            "jazz": ["smooth", "sophisticated", "improvisational", "soulful"],
+            "rock": ["powerful", "driving", "rebellious", "energetic"],
+            "electronic": ["futuristic", "atmospheric", "synthesized", "rhythmic"],
+            "pop": ["catchy", "melodic", "accessible", "memorable"],
+            "classical": ["elegant", "timeless", "orchestral", "refined"],
+            "hip-hop": ["rhythmic", "urban", "storytelling", "expressive"],
+            "indie": ["authentic", "alternative", "creative", "introspective"]
+        }
+        
+        self.mood_descriptors = {
+            "calm": ["peaceful", "serene", "tranquil", "meditative"],
+            "energetic": ["dynamic", "intense", "vibrant", "powerful"],
+            "romantic": ["tender", "passionate", "intimate", "loving"],
+            "melancholic": ["reflective", "emotional", "nostalgic", "contemplative"],
+            "happy": ["joyful", "uplifting", "celebratory", "bright"]
+        }
+        
+        self.theme_contexts = {
+            "love": ["relationships", "connection", "devotion", "romance"],
+            "dreams": ["aspirations", "hope", "future", "possibilities"],
+            "life": ["experiences", "journey", "growth", "moments"],
+            "freedom": ["liberation", "independence", "breaking free", "self-expression"]
         }
 
+    def generate_synthetic_prompt_variations(self, original_prompt):
+        """Generate enhanced prompt variations using synthetic data techniques"""
+        detected_genre = self.detect_genre_from_prompt(original_prompt)
+        detected_mood = self.detect_mood_from_prompt(original_prompt)
+        detected_theme = self.extract_theme_from_prompt(original_prompt)
+        
+        variations = []
+        
+        # Base variation
+        variations.append(original_prompt)
+        
+        # Genre-enhanced variation
+        if detected_genre in self.genre_styles:
+            genre_descriptor = random.choice(self.genre_styles[detected_genre])
+            variations.append(f"{genre_descriptor} {original_prompt}")
+        
+        # Mood-enhanced variation
+        if detected_mood in self.mood_descriptors:
+            mood_descriptor = random.choice(self.mood_descriptors[detected_mood])
+            variations.append(f"{original_prompt} with {mood_descriptor} emotion")
+        
+        # Theme-enhanced variation
+        if detected_theme in self.theme_contexts:
+            theme_context = random.choice(self.theme_contexts[detected_theme])
+            variations.append(f"{original_prompt} focusing on {theme_context}")
+        
+        # Combined enhancement
+        style_elements = []
+        if detected_genre in self.genre_styles:
+            style_elements.append(random.choice(self.genre_styles[detected_genre]))
+        if detected_mood in self.mood_descriptors:
+            style_elements.append(random.choice(self.mood_descriptors[detected_mood]))
+        
+        if style_elements:
+            combined_style = " and ".join(style_elements)
+            variations.append(f"{combined_style} song about {original_prompt}")
+        
+        return variations
+
     def generate_lyrics(self, prompt, song_length="medium"):
-        """Generate professional lyrics using OpenAI GPT-4"""
+        """Generate professional lyrics using OpenAI GPT-4 with synthetic data enhancement"""
         print(f"🎤 Generating professional lyrics for: '{prompt}'")
+        
+        # Generate synthetic prompt variations for better results
+        prompt_variations = self.generate_synthetic_prompt_variations(prompt)
+        enhanced_prompt = random.choice(prompt_variations)
+        
+        print(f"✨ Using enhanced prompt variation: '{enhanced_prompt}'")
         
         try:
             # Create comprehensive prompt for OpenAI
@@ -64,7 +127,7 @@ class LyricsGenerator:
             Chorus line 3
             Chorus line 4"""
             
-            user_prompt = f"""Write complete song lyrics for: "{prompt}"
+            user_prompt = f"""Write complete song lyrics for: "{enhanced_prompt}"
             
             Create a song that captures the essence of this prompt with:
             - A compelling title that fits the theme
@@ -75,16 +138,17 @@ class LyricsGenerator:
             
             Make it professional quality, like something you'd hear on Spotify or Apple Music."""
 
-            response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",  # Good quality, affordable
+            # Use new OpenAI API
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
                 max_tokens=600,
-                temperature=0.8,  # Creative but not too random
-                presence_penalty=0.3,  # Encourage new ideas
-                frequency_penalty=0.3   # Reduce repetition
+                temperature=0.8,
+                presence_penalty=0.3,
+                frequency_penalty=0.3
             )
             
             full_lyrics = response.choices[0].message.content.strip()
@@ -97,8 +161,102 @@ class LyricsGenerator:
             
         except Exception as e:
             print(f"❌ OpenAI lyrics generation failed: {e}")
-            print("🔄 Using high-quality template fallback...")
-            return self.generate_premium_fallback(prompt)
+            print("🔄 Attempting synthetic data recovery...")
+            return self.generate_synthetic_lyrics_fallback(prompt)
+
+    def generate_synthetic_lyrics_fallback(self, prompt):
+        """Generate lyrics using synthetic data techniques when API fails"""
+        print("🔄 Generating synthetic data-based lyrics...")
+        
+        # Analyze prompt for synthetic data generation
+        detected_genre = self.detect_genre_from_prompt(prompt)
+        detected_mood = self.detect_mood_from_prompt(prompt)
+        detected_theme = self.extract_theme_from_prompt(prompt)
+        
+        # Generate synthetic title using detected characteristics
+        genre_words = self.genre_styles.get(detected_genre, ["musical"])
+        mood_words = self.mood_descriptors.get(detected_mood, ["emotional"])
+        theme_words = self.theme_contexts.get(detected_theme, ["expressive"])
+        
+        title_components = [
+            random.choice(genre_words).title(),
+            random.choice(theme_words).title().split()[0],
+            random.choice(mood_words).title()
+        ]
+        synthetic_title = " ".join(title_components[:2])
+        
+        # Generate synthetic lyrics structure
+        verse_themes = self.generate_synthetic_verse_themes(detected_theme, detected_mood)
+        chorus_theme = self.generate_synthetic_chorus_theme(detected_theme, detected_mood)
+        bridge_theme = self.generate_synthetic_bridge_theme(detected_theme)
+        
+        synthetic_lyrics = f"""# {synthetic_title}
+
+[Verse 1]
+{verse_themes[0]}
+
+[Chorus]
+{chorus_theme}
+
+[Verse 2]
+{verse_themes[1] if len(verse_themes) > 1 else verse_themes[0]}
+
+[Chorus]
+{chorus_theme}
+
+[Bridge]
+{bridge_theme}
+
+[Chorus]
+{chorus_theme}"""
+
+        return {
+            "title": synthetic_title,
+            "lyrics": synthetic_lyrics,
+            "theme": detected_theme,
+            "genre": detected_genre,
+            "mood": detected_mood,
+            "source": "synthetic_data"
+        }
+
+    def generate_synthetic_verse_themes(self, theme, mood):
+        """Generate synthetic verse content based on theme and mood"""
+        synthetic_verses = {
+            "love": [
+                "Every moment with you feels like a dream come true\nIn your eyes I see the future that we're walking to\nTime moves differently when you're by my side\nIn this feeling I can't hide",
+                "Through the storms and sunny days we'll find our way\nEvery challenge that we face just makes us stronger every day\nHand in hand we'll write our story in the stars\nNothing can keep us apart"
+            ],
+            "dreams": [
+                "Looking up at the endless sky I see my path\nEvery step I take today will be worth the aftermath\nThe future's calling out my name with crystal clarity\nI'm ready for this journey",
+                "Mountains high and oceans wide won't slow me down\nEvery obstacle I face becomes my solid ground\nWith determination burning bright inside my soul\nI'm moving toward my goal"
+            ],
+            "life": [
+                "Every sunrise brings a chance to start anew\nEvery lesson learned becomes a part of what I do\nIn the rhythm of the days I find my pace\nLiving in this space",
+                "Through the laughter and the tears I grow each day\nEvery moment teaches me there's always another way\nIn the simple things I find the greatest joy\nNothing can destroy"
+            ]
+        }
+        
+        return synthetic_verses.get(theme, synthetic_verses["life"])
+
+    def generate_synthetic_chorus_theme(self, theme, mood):
+        """Generate synthetic chorus content"""
+        synthetic_choruses = {
+            "love": "This is our moment, this is our time\nEvery heartbeat tells me that you're mine\nNothing else matters when we're together\nWe'll face whatever, now and forever",
+            "dreams": "I'm reaching higher than I've ever been before\nEvery dream I chase just opens up another door\nNothing's gonna stop me from becoming who I'm meant to be\nThis is my destiny",
+            "life": "Every day's a gift, every breath's a chance\nTo live with purpose, to join the dance\nOf life and love and everything between\nLiving in the scene"
+        }
+        
+        return synthetic_choruses.get(theme, synthetic_choruses["life"])
+
+    def generate_synthetic_bridge_theme(self, theme):
+        """Generate synthetic bridge content"""
+        synthetic_bridges = {
+            "love": "When the world gets complicated\nAnd everything feels jaded\nYour love reminds me who I am\nThis is where I take my stand",
+            "dreams": "Sometimes the path gets unclear\nSometimes I'm filled with fear\nBut deep inside I know it's true\nThere's nothing I can't do",
+            "life": "In the quiet moments when I reflect\nOn all the ways that I connect\nWith the beauty that surrounds us all\nI hear the call"
+        }
+        
+        return synthetic_bridges.get(theme, synthetic_bridges["life"])
 
     def parse_openai_lyrics(self, full_lyrics, original_prompt):
         """Parse OpenAI-generated lyrics into structured format"""
@@ -131,88 +289,19 @@ class LyricsGenerator:
             "source": "openai_gpt4"
         }
 
-    def generate_premium_fallback(self, prompt):
-        """High-quality template fallback if API fails"""
-        print("🎯 Generating premium template lyrics...")
-        
-        theme = self.extract_theme_from_prompt(prompt)
-        genre = self.detect_genre_from_prompt(prompt)
-        mood = self.detect_mood_from_prompt(prompt)
-        
-        # Premium template with better quality
-        premium_templates = {
-            "love": {
-                "title": ["Endless Hearts", "Love's Symphony", "Forever Yours", "Heart's Desire", "Infinite Love"],
-                "verse": [
-                    "In the quiet of your eyes, I see tomorrow\nEvery whisper of your voice erases sorrow\nTime stands still when you're near, nothing else is clear\nIn this moment we disappear"
-                ],
-                "chorus": [
-                    "You're my light in the darkness, my hope in the storm\nEvery beat of your heart keeps me safe and warm\nThis love we've found is larger than life\nYou're my song, my truth, my guiding light"
-                ]
-            },
-            "dreams": {
-                "title": ["Chasing Stars", "Vision Quest", "Tomorrow's Light", "Dream Walker", "Infinite Skies"],
-                "verse": [
-                    "Standing at the edge of what could be\nEvery step forward sets my spirit free\nThe road ahead is calling out my name\nI won't let fear extinguish my flame"
-                ],
-                "chorus": [
-                    "I'm chasing dreams across the endless sky\nNothing's gonna stop me, I was born to fly\nEvery setback makes me stronger than before\nI'll keep pushing till I find what I'm looking for"
-                ]
-            }
-        }
-        
-        template_data = premium_templates.get(theme, premium_templates["dreams"])
-        title = random.choice(template_data["title"])
-        verse = random.choice(template_data["verse"])
-        chorus = random.choice(template_data["chorus"])
-        
-        lyrics = f"""# {title}
-
-[Verse 1]
-{verse}
-
-[Chorus]
-{chorus}
-
-[Verse 2]
-{verse.replace('your', 'my').replace('You', 'I')}
-
-[Chorus]
-{chorus}
-
-[Bridge]
-Maybe we were meant for something more
-Than what we've seen and felt before
-A different path, an open door
-To everything we're fighting for
-
-[Chorus]
-{chorus}"""
-
-        return {
-            "title": title,
-            "lyrics": lyrics,
-            "theme": theme,
-            "genre": genre, 
-            "mood": mood,
-            "source": "premium_template"
-        }
-
     def detect_theme_from_lyrics(self, lyrics, prompt):
         """Detect theme from generated lyrics content"""
         lyrics_lower = lyrics.lower()
         prompt_lower = prompt.lower()
         
         themes = {
-            "love": ["love", "heart", "forever", "together", "kiss", "embrace", "romance"],
-            "dreams": ["dream", "hope", "future", "tomorrow", "aspire", "vision", "goal"],
-            "freedom": ["free", "escape", "liberty", "break", "fly", "wings", "open"],
-            "life": ["life", "living", "moment", "time", "experience", "journey"],
-            "heartbreak": ["broken", "goodbye", "tears", "pain", "lost", "lonely"],
-            "happiness": ["happy", "joy", "smile", "bright", "sunshine", "celebrate"]
+            "love": ["love", "heart", "forever", "together", "romance"],
+            "dreams": ["dream", "hope", "future", "tomorrow", "aspire"],
+            "freedom": ["free", "escape", "liberty", "break", "fly"],
+            "life": ["life", "living", "moment", "time", "experience"],
+            "calm": ["peace", "quiet", "serene", "tranquil", "gentle"]
         }
         
-        # Check both lyrics and original prompt
         combined_text = lyrics_lower + " " + prompt_lower
         
         for theme, keywords in themes.items():
@@ -224,32 +313,31 @@ To everything we're fighting for
         """Detect genre from original prompt"""
         prompt_lower = prompt.lower()
         
-        if any(word in prompt_lower for word in ["rock", "metal", "guitar", "heavy"]):
+        if any(word in prompt_lower for word in ["jazz", "blues", "saxophone"]):
+            return "jazz"
+        elif any(word in prompt_lower for word in ["rock", "metal", "guitar"]):
             return "rock"
-        elif any(word in prompt_lower for word in ["electronic", "edm", "synth", "dance"]):
+        elif any(word in prompt_lower for word in ["electronic", "edm", "synth"]):
             return "electronic"
-        elif any(word in prompt_lower for word in ["pop", "catchy", "mainstream", "radio"]):
+        elif any(word in prompt_lower for word in ["pop", "catchy", "mainstream"]):
             return "pop"
-        elif any(word in prompt_lower for word in ["ballad", "slow", "emotional", "piano"]):
-            return "ballad"
-        elif any(word in prompt_lower for word in ["hip hop", "rap", "urban", "beat"]):
+        elif any(word in prompt_lower for word in ["classical", "orchestral", "piano"]):
+            return "classical"
+        elif any(word in prompt_lower for word in ["hip hop", "rap", "urban"]):
             return "hip-hop"
-        elif any(word in prompt_lower for word in ["indie", "alternative", "underground"]):
-            return "indie"
         else:
-            return "pop"
+            return "indie"
 
     def detect_mood_from_lyrics(self, lyrics, prompt):
         """Detect mood from lyrics and prompt"""
         combined_text = (lyrics + " " + prompt).lower()
         
         mood_keywords = {
-            "happy": ["happy", "joy", "bright", "celebrate", "smile", "laugh", "fun"],
-            "sad": ["sad", "cry", "tears", "broken", "lonely", "empty", "dark"],
-            "energetic": ["energy", "power", "strong", "intense", "fire", "electric"],
-            "calm": ["calm", "peace", "quiet", "gentle", "soft", "serene"],
-            "romantic": ["love", "heart", "kiss", "tender", "sweet", "romantic"],
-            "dark": ["dark", "shadow", "mystery", "deep", "haunting"]
+            "calm": ["calm", "peace", "quiet", "gentle", "serene", "study", "chill"],
+            "happy": ["happy", "joy", "bright", "celebrate", "smile"],
+            "sad": ["sad", "melancholy", "tears", "lonely", "empty"],
+            "energetic": ["energy", "power", "strong", "intense", "electric"],
+            "romantic": ["love", "heart", "tender", "sweet", "romantic"]
         }
         
         for mood, keywords in mood_keywords.items():
@@ -261,18 +349,33 @@ To everything we're fighting for
         """Extract theme from original prompt"""
         prompt_lower = prompt.lower()
         
-        if any(word in prompt_lower for word in ["love", "romantic", "heart", "relationship"]):
+        if any(word in prompt_lower for word in ["love", "romantic", "heart"]):
             return "love"
-        elif any(word in prompt_lower for word in ["dream", "future", "hope", "aspiration"]):
+        elif any(word in prompt_lower for word in ["dream", "future", "hope"]):
             return "dreams"
-        elif any(word in prompt_lower for word in ["free", "escape", "liberty", "break"]):
-            return "freedom"
-        elif any(word in prompt_lower for word in ["sad", "heartbreak", "lost", "goodbye"]):
-            return "heartbreak"
-        elif any(word in prompt_lower for word in ["happy", "joy", "celebrate", "party"]):
-            return "happiness"
+        elif any(word in prompt_lower for word in ["calm", "chill", "study", "peaceful"]):
+            return "calm"
+        elif any(word in prompt_lower for word in ["life", "living", "experience"]):
+            return "life"
         else:
             return "life"
+
+    def detect_mood_from_prompt(self, prompt):
+        """Detect mood from original prompt"""
+        prompt_lower = prompt.lower()
+        
+        if any(word in prompt_lower for word in ["calm", "chill", "peaceful", "study"]):
+            return "calm"
+        elif any(word in prompt_lower for word in ["happy", "joyful", "upbeat"]):
+            return "happy"
+        elif any(word in prompt_lower for word in ["sad", "melancholy", "emotional"]):
+            return "sad"
+        elif any(word in prompt_lower for word in ["energetic", "intense", "powerful"]):
+            return "energetic"
+        elif any(word in prompt_lower for word in ["romantic", "love", "tender"]):
+            return "romantic"
+        else:
+            return "balanced"
 
     def save_lyrics(self, lyrics_data):
         """Save lyrics to file"""

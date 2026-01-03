@@ -49,16 +49,26 @@ class ImageGenerator:
         image_bytes = None
         try:
             if getattr(self, "_openai_mode", None) == "client":
+                # FIXED: Use the new API format correctly
                 result = self._openai_client.images.generate(
                     model="dall-e-3",
                     prompt=dalle_prompt,
                     size=f"{size}x{size}",
                     quality="hd",
                     n=1,
+                    response_format="url"  # Get URL instead of base64
                 )
-                import base64
-                image_bytes = base64.b64decode(result.data[0].b64_json)
+                
+                # Download from the URL
+                image_url = result.data[0].url
+                print(f"🔗 Downloading from: {image_url}")
+                
+                response = requests.get(image_url, timeout=60)
+                response.raise_for_status()
+                image_bytes = response.content
+                
             else:
+                # Legacy API handling
                 resp = self._openai.Image.create(
                     prompt=dalle_prompt,
                     model="dall-e-3",
@@ -75,6 +85,11 @@ class ImageGenerator:
                     import base64
                     image_bytes = base64.b64decode(resp.data[0].b64_json)
 
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Network error downloading image: {e}")
+            # Try with retry mechanism
+            return self._download_with_retry(image_url if 'image_url' in locals() else None, dalle_prompt, size)
+            
         except Exception as e:
             raise RuntimeError(f"❌ DALL·E generation failed: {e}")
 
@@ -86,6 +101,49 @@ class ImageGenerator:
 
         print(f"✅ DALL·E cover saved → {filename} ({time.time()-start:.2f}s)")
         return filename
+
+    def _download_with_retry(self, image_url, dalle_prompt, size, max_retries=3):
+        """Retry mechanism for network issues"""
+        if not image_url:
+            # Regenerate if no URL available
+            try:
+                result = self._openai_client.images.generate(
+                    model="dall-e-3",
+                    prompt=dalle_prompt,
+                    size=f"{size}x{size}",
+                    quality="hd",
+                    n=1,
+                    response_format="url"
+                )
+                image_url = result.data[0].url
+            except Exception as e:
+                raise RuntimeError(f"❌ Failed to regenerate image: {e}")
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"🔄 Download attempt {attempt + 1}/{max_retries}")
+                response = requests.get(
+                    image_url, 
+                    timeout=30,
+                    headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'}
+                )
+                response.raise_for_status()
+                
+                # Save the image
+                os.makedirs("assets", exist_ok=True)
+                ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+                filename = f"assets/cover_{ts}.png"
+                with open(filename, "wb") as f:
+                    f.write(response.content)
+                
+                print(f"✅ Image downloaded successfully after {attempt + 1} attempts")
+                return filename
+                
+            except Exception as e:
+                print(f"❌ Download attempt {attempt + 1} failed: {e}")
+                if attempt == max_retries - 1:
+                    raise RuntimeError(f"❌ Failed to download image after {max_retries} attempts: {e}")
+                time.sleep(2 ** attempt)  # Exponential backoff
 
     def _create_dalle_prompt(self, music_prompt, style_hint=None, mood=None, chaos=8):
         detected_mood = mood or self._detect_mood(music_prompt)
