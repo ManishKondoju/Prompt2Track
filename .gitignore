@@ -28,3 +28,4 @@ static/
 
 # Logs
 *.log
+client/public/video.mp4
