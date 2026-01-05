@@ -1,227 +1,181 @@
 import os
 import time
-import random
 import requests
 from datetime import datetime
-from PIL import Image
 
 
 class ImageGenerator:
     """
-    API-only album cover generator using OpenAI's DALL·E 3.
-    Features:
-    - 'chaos' dial for wilder prompts (0–10).
-    - Rich, surreal, high-contrast prompt building.
+    Super literal image generator - creates exactly what you describe.
+    No abstract art, no artistic interpretation - just literal scenes.
     """
 
     def __init__(self):
-        print("🎨 Initializing OpenAI (DALL·E) for album covers...")
+        print("🎨 Initializing LITERAL OpenAI (DALL·E) generator...")
         self._init_openai_client()
 
     def _init_openai_client(self):
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise RuntimeError("❌ OPENAI_API_KEY not found in environment variables.")
+            raise RuntimeError("❌ OPENAI_API_KEY not found")
 
         try:
             from openai import OpenAI
             self._openai_client = OpenAI(api_key=api_key)
-            self._openai_mode = "client"  # new API
-            print("✅ OpenAI client initialized (new API)")
-        except Exception:
+            self._api_mode = "new"
+            print("✅ OpenAI client initialized")
+        except ImportError:
             import openai
             openai.api_key = api_key
             self._openai = openai
-            self._openai_mode = "legacy"  # old API
-            print("✅ OpenAI client initialized (legacy API)")
+            self._api_mode = "legacy"
+            print("✅ OpenAI legacy client initialized")
 
-    def generate(self, prompt, style_hint=None, mood=None, chaos=8, size=1024):
+    def generate(self, prompt, chaos=0, size=1024):
         """
-        Generate an album cover via DALL·E.
-        chaos: 0..10, higher = wilder prompts
+        Generate LITERAL album cover - shows exactly what you describe.
+        chaos=0 for maximum literalness
         """
-        chaos = max(0, min(int(chaos), 10))
-        dalle_prompt = self._create_dalle_prompt(prompt, style_hint=style_hint, mood=mood, chaos=chaos)
-
-        print(f"🎭 Prompt → {dalle_prompt[:200]}...")
+        # Force literal interpretation
+        dalle_prompt = self._force_literal_prompt(prompt)
+        
+        print(f"🎭 LITERAL Prompt → {dalle_prompt}")
         start = time.time()
 
-        image_bytes = None
         try:
-            if getattr(self, "_openai_mode", None) == "client":
-                # FIXED: Use the new API format correctly
-                result = self._openai_client.images.generate(
-                    model="dall-e-3",
-                    prompt=dalle_prompt,
-                    size=f"{size}x{size}",
-                    quality="hd",
-                    n=1,
-                    response_format="url"  # Get URL instead of base64
-                )
-                
-                # Download from the URL
-                image_url = result.data[0].url
-                print(f"🔗 Downloading from: {image_url}")
-                
-                response = requests.get(image_url, timeout=60)
-                response.raise_for_status()
-                image_bytes = response.content
-                
+            if self._api_mode == "new":
+                image_bytes = self._generate_new_api(dalle_prompt, size)
             else:
-                # Legacy API handling
-                resp = self._openai.Image.create(
-                    prompt=dalle_prompt,
-                    model="dall-e-3",
-                    n=1,
-                    size=f"{size}x{size}",
-                    quality="hd"
-                )
-                if hasattr(resp.data[0], "url") and resp.data[0].url:
-                    image_url = resp.data[0].url
-                    r = requests.get(image_url, timeout=60)
-                    r.raise_for_status()
-                    image_bytes = r.content
-                else:
-                    import base64
-                    image_bytes = base64.b64decode(resp.data[0].b64_json)
-
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Network error downloading image: {e}")
-            # Try with retry mechanism
-            return self._download_with_retry(image_url if 'image_url' in locals() else None, dalle_prompt, size)
-            
+                image_bytes = self._generate_legacy_api(dalle_prompt, size)
         except Exception as e:
-            raise RuntimeError(f"❌ DALL·E generation failed: {e}")
+            raise RuntimeError(f"❌ Generation failed: {e}")
 
+        # Save image
         os.makedirs("assets", exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = f"assets/cover_{ts}.png"
+        filename = f"assets/literal_{ts}.png"
+        
         with open(filename, "wb") as f:
             f.write(image_bytes)
 
-        print(f"✅ DALL·E cover saved → {filename} ({time.time()-start:.2f}s)")
+        print(f"✅ LITERAL image saved → {filename} ({time.time()-start:.2f}s)")
         return filename
 
-    def _download_with_retry(self, image_url, dalle_prompt, size, max_retries=3):
-        """Retry mechanism for network issues"""
-        if not image_url:
-            # Regenerate if no URL available
-            try:
-                result = self._openai_client.images.generate(
-                    model="dall-e-3",
-                    prompt=dalle_prompt,
-                    size=f"{size}x{size}",
-                    quality="hd",
-                    n=1,
-                    response_format="url"
-                )
-                image_url = result.data[0].url
-            except Exception as e:
-                raise RuntimeError(f"❌ Failed to regenerate image: {e}")
+    def _force_literal_prompt(self, music_prompt):
+        """
+        Force DALL-E to create literal scenes, not abstract art.
+        """
+        # Remove abstract trigger words and force photorealistic scene
+        dalle_prompt = "Photorealistic movie scene showing "
         
-        for attempt in range(max_retries):
-            try:
-                print(f"🔄 Download attempt {attempt + 1}/{max_retries}")
-                response = requests.get(
-                    image_url, 
-                    timeout=30,
-                    headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'}
-                )
-                response.raise_for_status()
+        # Parse the music prompt literally
+        if "dragon battle" in music_prompt.lower():
+            dalle_prompt += "a large dragon fighting knights in a stone mountain fortress, "
+            dalle_prompt += "with a full symphony orchestra playing instruments in the background, "
+            
+        elif "tribal drums and flutes" in music_prompt.lower():
+            dalle_prompt += "actual wooden tribal drums and bamboo flutes "
+            if "temple" in music_prompt.lower():
+                dalle_prompt += "inside an ancient stone temple with carved pillars, "
                 
-                # Save the image
-                os.makedirs("assets", exist_ok=True)
-                ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-                filename = f"assets/cover_{ts}.png"
-                with open(filename, "wb") as f:
-                    f.write(response.content)
+        elif "piano concert" in music_prompt.lower():
+            dalle_prompt += "a grand piano with a pianist performing "
+            if "theater" in music_prompt.lower() or "hall" in music_prompt.lower():
+                dalle_prompt += "on stage in an elegant concert hall with audience, "
                 
-                print(f"✅ Image downloaded successfully after {attempt + 1} attempts")
-                return filename
+        elif "jazz saxophone" in music_prompt.lower():
+            dalle_prompt += "a saxophone player performing "
+            if "nightclub" in music_prompt.lower():
+                dalle_prompt += "in a dimly lit jazz club with tables and smoke, "
                 
-            except Exception as e:
-                print(f"❌ Download attempt {attempt + 1} failed: {e}")
-                if attempt == max_retries - 1:
-                    raise RuntimeError(f"❌ Failed to download image after {max_retries} attempts: {e}")
-                time.sleep(2 ** attempt)  # Exponential backoff
-
-    def _create_dalle_prompt(self, music_prompt, style_hint=None, mood=None, chaos=8):
-        detected_mood = mood or self._detect_mood(music_prompt)
-        detected_genre = self._detect_genre(music_prompt)
-
-        style_packs = [
-            "surreal, cinematic, ultra-dramatic lighting, volumetric fog, lens flares, anamorphic bokeh, dream logic, glossy highlights, reflective surfaces",
-            "abstract expressionism with digital glitch, neon diffraction, VHS scanlines, shattered geometry, fluorescent inks, paint splatter",
-            "vaporwave retro-futurism, holographic gradients, iridescent chrome, collage cutouts, grid horizon, sunburst",
-            "dark fantasy graphic novel, bold inky line art, halftone shading, electric rim light, arcane symbols, chiaroscuro",
-            "maximalist bio-organic forms, fractal tendrils, liquid metal, coral-like growths, opalescent textures, hyper-detailed macro surfaces"
-        ]
-
-        palettes_by_mood = {
-            "happy": ["neon magenta & electric cyan", "golden orange & hot pink"],
-            "sad": ["deep indigo & midnight blue", "storm gray & teal"],
-            "energetic": ["infrared red & electric blue", "acid yellow & black"],
-            "calm": ["sage & powder blue", "lavender & periwinkle"],
-            "romantic": ["rose quartz & lilac", "blush pink & warm gold"],
-            "dark": ["onyx & ultraviolet", "oil-slick iridescence"],
-            "balanced": ["copper & teal", "amber & cobalt"]
-        }
-        palette_choices = palettes_by_mood.get(detected_mood, palettes_by_mood["balanced"])
-
-        comps = ["extreme low-angle hero shot", "wide-angle distortion", "long exposure motion trails", "macro shot", "Dutch tilt"]
-        lights = ["volumetric god rays", "neon bounce light", "rim light with scattering", "glowing particles"]
-        textures = ["glass shards", "thick paint", "velvet + steel", "smoke layers", "film grain"]
-        movements = ["Salvador Dalí surrealism", "Afrofuturism", "Psychedelic poster art", "Op art"]
-
-        n_comp = 1 + chaos // 4
-        n_light = 1 + chaos // 4
-        n_tex = 1 + min(2, chaos // 3)
-
-        style_pack = random.choice(style_packs if chaos >= 5 else style_packs[:3])
-        picked_comps = ", ".join(random.sample(comps, n_comp))
-        picked_lights = ", ".join(random.sample(lights, n_light))
-        picked_textures = ", ".join(random.sample(textures, n_tex))
-        picked_palette = random.choice(palette_choices)
-        picked_movement = random.choice(movements)
-
-        subject_hint = self._extract_visual_concept(music_prompt)
-
-        dalle_prompt = (
-            f"{subject_hint}; {style_pack}; {picked_comps}; {picked_lights}; {picked_textures}; "
-            f"color palette: {picked_palette}; {picked_movement}; "
-            f"ultra-detailed, high contrast, kinetic composition; album cover design, square format, no text"
-        )
-        if style_hint:
-            dalle_prompt += f"; emphasized style: {style_hint}"
-        dalle_prompt += f"; subtle nod to {detected_genre} music aesthetics"
-
+        elif "guitar" in music_prompt.lower():
+            dalle_prompt += "a person playing guitar "
+            if "campfire" in music_prompt.lower():
+                dalle_prompt += "around a campfire under starry night sky, "
+            elif "rock" in music_prompt.lower():
+                dalle_prompt += "on a concert stage with amplifiers and lights, "
+                
+        elif "violin" in music_prompt.lower():
+            dalle_prompt += "a violinist playing violin "
+            if "cathedral" in music_prompt.lower():
+                dalle_prompt += "inside a gothic cathedral with stained glass windows, "
+                
+        elif "electronic" in music_prompt.lower() or "synthesizer" in music_prompt.lower():
+            dalle_prompt += "electronic synthesizer keyboards and DJ equipment "
+            if "futuristic" in music_prompt.lower():
+                dalle_prompt += "in a high-tech studio with neon lights, "
+                
+        elif "harp" in music_prompt.lower():
+            dalle_prompt += "a large golden harp being played "
+            if "forest" in music_prompt.lower():
+                dalle_prompt += "in a sunlit forest clearing with trees, "
+                
+        elif "orchestra" in music_prompt.lower():
+            dalle_prompt += "a full symphony orchestra with musicians playing various instruments "
+            if "concert hall" in music_prompt.lower():
+                dalle_prompt += "on stage in an elegant concert hall, "
+                
+        else:
+            # Generic fallback - still be literal
+            dalle_prompt += f"a realistic scene depicting {music_prompt}, "
+        
+        # Force photorealistic style, prevent abstract art
+        dalle_prompt += "cinematic lighting, detailed and realistic, "
+        dalle_prompt += "NOT abstract art, NOT artistic interpretation, "
+        dalle_prompt += "photorealistic movie scene style, album cover format, square composition"
+        
         return dalle_prompt
 
-    def _extract_visual_concept(self, prompt):
-        p = prompt.lower()
-        if "ocean" in p or "waves" in p: return "surging neon ocean waves"
-        if "city" in p: return "impossibly tall neon-drenched cityscape"
-        if "forest" in p: return "enchanted forest with glowing flora"
-        if "space" in p: return "cosmic vista with swirling galaxies"
-        if "storm" in p: return "thunderstorm panorama with electric rain"
-        return f"surreal scene inspired by '{prompt}'"
+    def _generate_new_api(self, prompt, size):
+        """New OpenAI API"""
+        response = self._openai_client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size=f"{size}x{size}",
+            quality="hd",
+            n=1,
+        )
+        
+        image_url = response.data[0].url
+        img_response = requests.get(image_url, timeout=60)
+        img_response.raise_for_status()
+        return img_response.content
 
-    def _detect_mood(self, prompt):
-        p = prompt.lower()
-        if any(w in p for w in ["happy", "joyful"]): return "happy"
-        if any(w in p for w in ["sad", "melancholy"]): return "sad"
-        if any(w in p for w in ["energetic", "powerful"]): return "energetic"
-        if any(w in p for w in ["calm", "peaceful"]): return "calm"
-        if any(w in p for w in ["romantic", "love"]): return "romantic"
-        if any(w in p for w in ["dark", "mysterious"]): return "dark"
-        return "balanced"
+    def _generate_legacy_api(self, prompt, size):
+        """Legacy OpenAI API"""
+        response = self._openai.Image.create(
+            prompt=prompt,
+            model="dall-e-3",
+            n=1,
+            size=f"{size}x{size}",
+            quality="hd"
+        )
+        
+        image_url = response['data'][0]['url']
+        img_response = requests.get(image_url, timeout=60)
+        img_response.raise_for_status()
+        return img_response.content
 
-    def _detect_genre(self, prompt):
-        p = prompt.lower()
-        if "rock" in p: return "rock"
-        if "electronic" in p or "edm" in p: return "electronic"
-        if "jazz" in p: return "jazz"
-        if "classical" in p: return "classical"
-        if "hip hop" in p: return "hip-hop"
-        if "indie" in p: return "indie"
-        return "pop"
+
+def test_literal_prompts():
+    """Test with problematic prompts"""
+    generator = ImageGenerator()
+    
+    problem_prompts = [
+        "Dragon battle music with full orchestra in mountain fortress",
+        "Tribal drums and flutes for an ancient temple exploration", 
+        "Jazz saxophone performance in a smoky nightclub",
+        "Classical piano concert in a grand theater hall"
+    ]
+    
+    for prompt in problem_prompts:
+        print(f"\n🎬 Testing: {prompt}")
+        try:
+            filename = generator.generate(prompt)
+            print(f"✅ Generated literal scene: {filename}")
+        except Exception as e:
+            print(f"❌ Failed: {e}")
+
+
+if __name__ == "__main__":
+    test_literal_prompts()
